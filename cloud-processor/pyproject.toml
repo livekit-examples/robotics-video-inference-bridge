@@ -1,13 +1,25 @@
 [project]
 name = "cloud-processor"
 version = "0.1.0"
-description = "Cloud processor for edge CV - runs YOLO inference on video streams"
+description = "Cloud processor for edge CV - runs SAM3 segmentation on video streams"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "livekit>=0.18",
     "livekit-api>=0.8",
-    "ultralytics>=8.0",
+    "sam3",
+    "torch",
+    "pillow",
     "numpy>=1.24",
     "python-dotenv>=1.0",
+    "setuptools<78",
+    "importlib-resources>=6.5.2",
+    "einops>=0.8.2",
+    "torchvision>=0.25.0",
+    "decord>=0.6.0",
+    "pycocotools>=2.0.11",
+    "psutil>=7.2.2",
 ]
+
+[tool.uv.sources]
+sam3 = { git = "https://github.com/facebookresearch/sam3.git" }
