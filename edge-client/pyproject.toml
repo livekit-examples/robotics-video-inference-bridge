@@ -7,6 +7,6 @@ requires-python = ">=3.10"
 dependencies = [
     "livekit>=0.18",
     "livekit-api>=0.8",
-    "imageio[ffmpeg]>=2.34",
+    "opencv-python>=4.8",
     "python-dotenv>=1.0",
 ]
