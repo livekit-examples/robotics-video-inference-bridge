@@ -73,7 +73,7 @@ The SAM3 model weights are downloaded automatically on first run via HuggingFace
 
 ```sh
 uv tool install huggingface-hub
-hf auth login --no-git-credential
+hf auth login
 ```
 
 If the model is **not** gated, no HuggingFace login is needed — weights download automatically.
