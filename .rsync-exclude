@@ -1,0 +1,14 @@
+.git/
+.venv/
+__pycache__/
+*.pyc
+*.pt
+.claude/
+.vscode/
+**/sdkconfig
+**/build/
+**/managed_components/
+uv.lock
+.DS_Store
+edge-embedded-client/
+.github/
