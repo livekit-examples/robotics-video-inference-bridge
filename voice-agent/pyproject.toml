@@ -1,0 +1,11 @@
+[project]
+name = "voice-agent"
+version = "0.1.0"
+description = "LiveKit voice agent for edge CV"
+requires-python = ">=3.10"
+dependencies = [
+    "livekit>=0.18",
+    "livekit-agents>=1.0",
+    "livekit-plugins-silero>=1.0",
+    "python-dotenv>=1.0",
+]
