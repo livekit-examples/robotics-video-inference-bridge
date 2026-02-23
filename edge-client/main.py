@@ -149,10 +149,8 @@ async def main():
     @room.on("data_received")
     def on_data_received(data: rtc.DataPacket):
         global _latest_detections
-        if data.topic == "data/sam3_detections":
+        if data.topic == f"data/{track_name}":
             payload = json.loads(data.data.decode())
-            if payload.get("track") != track_name:
-                return
             prompt = payload.get("prompt", "")
             detections = payload.get("detections", [])
             _latest_detections = detections

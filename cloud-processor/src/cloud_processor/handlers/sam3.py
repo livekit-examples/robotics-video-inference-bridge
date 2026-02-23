@@ -203,25 +203,27 @@ async def handle_sam3(
 
             frames_processed += 1
 
+            payload = json.dumps({
+                "source": participant_identity,
+                "timestamp": time.time(),
+                "frame_width": rgb_frame.width,
+                "frame_height": rgb_frame.height,
+                "prompt": prompt,
+                "detections": detections,
+            }).encode()
+
             logger.info(
                 f"[{participant_identity}:{track_name}] Frame #{frames_processed}: "
                 f"{len(detections)} detection(s), "
-                f"inference {inference_ms:.0f}ms "
+                f"inference {inference_ms:.0f}ms, "
+                f"payload {len(payload)} bytes "
                 f"(skipped fps: {frames_skipped_fps}, skipped gpu: {frames_skipped_gpu})"
             )
 
             await room.local_participant.publish_data(
-                payload=json.dumps({
-                    "source": participant_identity,
-                    "track": track_name,
-                    "timestamp": time.time(),
-                    "frame_width": rgb_frame.width,
-                    "frame_height": rgb_frame.height,
-                    "prompt": prompt,
-                    "detections": detections,
-                }).encode(),
-                reliable=False,
-                topic="data/sam3_detections",
+                payload=payload,
+                reliable=True,
+                topic=f"data/{track_name}",
             )
 
             # Reset skip counters after successful inference
