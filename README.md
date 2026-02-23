@@ -68,7 +68,7 @@ brew install ffmpeg
 The SAM3 model weights are downloaded automatically on first run via HuggingFace. Since the model is gated, you'll need to:
 
 1. Create a [HuggingFace](https://huggingface.co/) account
-2. Accept the model license on the SAM3 model page
+2. Accept the model license on the [SAM3 model page](https://huggingface.co/facebook/sam3)
 3. Log in locally:
 
 ```sh
