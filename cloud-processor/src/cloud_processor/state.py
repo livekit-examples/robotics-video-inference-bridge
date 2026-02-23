@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cloud-processor")
 
 # Frame rate limiting
-TARGET_FPS = 2
+TARGET_FPS = 5
 FRAME_INTERVAL = 1.0 / TARGET_FPS
 
 # GPU access control - only one inference at a time
