@@ -133,21 +133,26 @@ async def main():
     api_key = os.environ["LIVEKIT_API_KEY"]
     api_secret = os.environ["LIVEKIT_API_SECRET"]
     room_name = os.environ.get("LIVEKIT_ROOM", "edge-cv")
+    client_identity = os.environ.get("CLIENT_IDENTITY", "edge-client")
+    track_name = f"sam3/{client_identity}"
 
     token = (
         api.AccessToken(api_key, api_secret)
-        .with_identity("edge-client")
+        .with_identity(client_identity)
         .with_grants(api.VideoGrants(room_join=True, room=room_name))
         .to_jwt()
     )
 
     room = rtc.Room()
 
+
     @room.on("data_received")
     def on_data_received(data: rtc.DataPacket):
         global _latest_detections
         if data.topic == "data/sam3_detections":
             payload = json.loads(data.data.decode())
+            if payload.get("track") != track_name:
+                return
             prompt = payload.get("prompt", "")
             detections = payload.get("detections", [])
             _latest_detections = detections
@@ -159,7 +164,7 @@ async def main():
     logger.info("Connected, publishing video...")
 
     source = rtc.VideoSource(WIDTH, HEIGHT)
-    track = rtc.LocalVideoTrack.create_video_track("sam3/webcam", source)
+    track = rtc.LocalVideoTrack.create_video_track(track_name, source)
     await room.local_participant.publish_track(
         track, rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_CAMERA)
     )
