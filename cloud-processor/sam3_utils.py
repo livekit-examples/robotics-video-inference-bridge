@@ -8,19 +8,37 @@ from PIL import Image
 logger = logging.getLogger("sam3-utils")
 
 
-def load_model(confidence_threshold: float = 0.5):
-    """Load SAM3 model and return a ready-to-use processor."""
+def load_model(confidence_threshold: float = 0.5, warmup: bool = True):
+    """Load SAM3 model and return a ready-to-use processor.
+
+    Args:
+        confidence_threshold: Minimum confidence for detections.
+        warmup: If True, run a dummy inference to trigger torch.compile.
+    """
     from sam3 import build_sam3_image_model
     from sam3.model.sam3_image_processor import Sam3Processor
 
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
-    torch.autocast("cuda", dtype=torch.bfloat16).__enter__()
+    torch.autocast("cuda", dtype=torch.float16).__enter__()
 
     sam3_root = os.path.dirname(__import__("sam3").__file__)
     bpe_path = os.path.join(sam3_root, "assets", "bpe_simple_vocab_16e6.txt.gz")
     model = build_sam3_image_model(bpe_path=bpe_path)
-    return Sam3Processor(model, confidence_threshold=confidence_threshold)
+
+    # Compile for faster inference
+    model = torch.compile(model, mode="reduce-overhead")
+
+    processor = Sam3Processor(model, confidence_threshold=confidence_threshold)
+
+    if warmup:
+        logger.info("Warming up model (compiling)...")
+        dummy_image = Image.new("RGB", (640, 480), color=(128, 128, 128))
+        processor.set_text_prompt(state=processor.set_image(dummy_image), prompt="object")
+        torch.cuda.synchronize()
+        logger.info("Warmup complete")
+
+    return processor
 
 
 def encode_mask_rle(mask: np.ndarray) -> dict:
@@ -87,25 +105,24 @@ def run_inference(processor, image: Image.Image, prompt: str) -> list[dict]:
     state = processor.set_image(image)
     state = processor.set_text_prompt(state=state, prompt=prompt)
 
-    masks = state["masks"]  # (N, 1, H, W) bool
-    boxes = state["boxes"]  # (N, 4) float32, absolute pixels [x1, y1, x2, y2]
-    scores = state["scores"]  # (N,) bfloat16
+    # Batch transfer to CPU (single sync instead of per-detection)
+    masks_np = state["masks"][:, 0].cpu().numpy().astype(np.uint8)  # (N, H, W)
+    boxes_np = state["boxes"].cpu().float().numpy()  # (N, 4)
+    scores_np = state["scores"].cpu().float().numpy()  # (N,)
 
     detections = []
-    for i in range(len(scores)):
-        mask_np = masks[i, 0].cpu().numpy().astype(np.uint8)
-        box = boxes[i].cpu().float().tolist()
-
+    for i in range(len(scores_np)):
+        box = boxes_np[i]
         detections.append(
             {
-                "score": float(scores[i]),
+                "score": float(scores_np[i]),
                 "box": {
                     "x1": box[0] / w,
                     "y1": box[1] / h,
                     "x2": box[2] / w,
                     "y2": box[3] / h,
                 },
-                "mask_rle": encode_mask_rle(mask_np),
+                "mask_rle": encode_mask_rle(masks_np[i]),
             }
         )
 
