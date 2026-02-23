@@ -31,7 +31,7 @@ cp .env.local.example .env.local
 ## Usage
 
 ```sh
-uv run python main.py
+uv run -m cloud_processor
 ```
 
 ## Environment Variables
@@ -72,10 +72,14 @@ Detections are published as JSON on the `detections` topic:
 
 ## Files
 
-| File            | Description                                          |
-| --------------- | ---------------------------------------------------- |
-| `main.py`       | LiveKit room management and video processing loop    |
-| `sam3_utils.py`  | SAM3 model loading, inference, and RLE encode/decode |
+```
+src/cloud_processor/
+├── __main__.py          # Entry point, room lifecycle
+├── state.py             # Config, shared state, RPC handlers
+└── handlers/
+    ├── router.py        # Track routing dispatch
+    └── sam3.py          # SAM3 model, inference, frame processing
+```
 
 ## Configuration
 

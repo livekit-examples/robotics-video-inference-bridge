@@ -1,12 +1,17 @@
-import logging
+import asyncio
+import json
 import os
+import time
 
 import numpy as np
 import torch
+from livekit import rtc
 from PIL import Image
 
-logger = logging.getLogger("sam3-utils")
+from cloud_processor.state import FRAME_INTERVAL, TARGET_FPS, get_prompt, gpu_lock, logger
 
+
+# --- Model loading and inference utilities ---
 
 def load_model(confidence_threshold: float = 0.5, warmup: bool = True):
     """Load SAM3 model and return a ready-to-use processor.
@@ -127,3 +132,100 @@ def run_inference(processor, image: Image.Image, prompt: str) -> list[dict]:
         )
 
     return detections
+
+
+# --- Frame processing handler ---
+
+async def handle_sam3(
+    track: rtc.Track,
+    track_name: str,
+    participant_identity: str,
+    processor,
+    room: rtc.Room,
+):
+    """Process video frames using SAM3 segmentation."""
+    video_stream = rtc.VideoStream(track)
+    last_frame_time = 0.0
+    frames_processed = 0
+    frames_skipped_fps = 0
+    frames_skipped_gpu = 0
+    current_prompt = get_prompt(track_name)
+
+    logger.info(
+        f"[{participant_identity}:{track_name}] SAM3 handler started "
+        f"(target {TARGET_FPS} fps, prompt='{current_prompt}')"
+    )
+
+    async for frame_event in video_stream:
+        now = time.monotonic()
+
+        # Drop frame if arriving too soon after the last processed frame
+        if now - last_frame_time < FRAME_INTERVAL:
+            frames_skipped_fps += 1
+            continue
+
+        # Drop frame if GPU is busy with another track
+        if gpu_lock.locked():
+            frames_skipped_gpu += 1
+            continue
+
+        last_frame_time = now
+
+        # Get current prompt (may have changed via RPC)
+        prompt = get_prompt(track_name)
+        if prompt != current_prompt:
+            logger.info(
+                f"[{participant_identity}:{track_name}] Prompt changed: "
+                f"'{current_prompt}' -> '{prompt}'"
+            )
+            current_prompt = prompt
+
+        try:
+            frame = frame_event.frame
+            rgb_frame = frame.convert(rtc.VideoBufferType.RGB24)
+            arr = np.frombuffer(rgb_frame.data, dtype=np.uint8).reshape(
+                (rgb_frame.height, rgb_frame.width, 3)
+            )
+            image = Image.fromarray(arr)
+
+            if frames_processed == 0:
+                logger.info(
+                    f"[{participant_identity}:{track_name}] First frame: "
+                    f"{rgb_frame.width}x{rgb_frame.height}"
+                )
+
+            t0 = time.monotonic()
+            async with gpu_lock:
+                detections = await asyncio.to_thread(
+                    run_inference, processor, image, prompt
+                )
+            inference_ms = (time.monotonic() - t0) * 1000
+
+            frames_processed += 1
+
+            logger.info(
+                f"[{participant_identity}:{track_name}] Frame #{frames_processed}: "
+                f"{len(detections)} detection(s), "
+                f"inference {inference_ms:.0f}ms "
+                f"(skipped fps: {frames_skipped_fps}, skipped gpu: {frames_skipped_gpu})"
+            )
+
+            await room.local_participant.publish_data(
+                payload=json.dumps({
+                    "source": participant_identity,
+                    "track": track_name,
+                    "timestamp": time.time(),
+                    "frame_width": rgb_frame.width,
+                    "frame_height": rgb_frame.height,
+                    "prompt": prompt,
+                    "detections": detections,
+                }).encode(),
+                reliable=False,
+                topic="data/sam3_detections",
+            )
+
+            # Reset skip counters after successful inference
+            frames_skipped_fps = 0
+            frames_skipped_gpu = 0
+        except Exception:
+            logger.exception(f"[{participant_identity}:{track_name}] Error processing frame")
