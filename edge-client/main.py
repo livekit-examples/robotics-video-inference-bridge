@@ -146,7 +146,7 @@ async def main():
     @room.on("data_received")
     def on_data_received(data: rtc.DataPacket):
         global _latest_detections
-        if data.topic == "detections":
+        if data.topic == "data/sam3_detections":
             payload = json.loads(data.data.decode())
             prompt = payload.get("prompt", "")
             detections = payload.get("detections", [])
@@ -159,7 +159,7 @@ async def main():
     logger.info("Connected, publishing video...")
 
     source = rtc.VideoSource(WIDTH, HEIGHT)
-    track = rtc.LocalVideoTrack.create_video_track("webcam", source)
+    track = rtc.LocalVideoTrack.create_video_track("sam3/webcam", source)
     await room.local_participant.publish_track(
         track, rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_CAMERA)
     )
