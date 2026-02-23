@@ -23,6 +23,25 @@ FRAME_INTERVAL = 1.0 / TARGET_FPS
 # other tracks skip their current frame instead of queuing stale data.
 gpu_lock = asyncio.Lock()
 
+# Prompt storage: track_name -> prompt, None key = global
+prompts: dict[str | None, str] = {}
+default_prompt = os.environ.get("SAM3_PROMPT", "object")
+
+
+def get_prompt(track_name: str) -> str:
+    """Get effective prompt for a track: per-track -> global -> default."""
+    return prompts.get(track_name) or prompts.get(None) or default_prompt
+
+
+async def _handle_set_prompt(data: rtc.rpc.RpcInvocationData) -> str:
+    """RPC handler for sam3.set_prompt method."""
+    request = json.loads(data.payload)
+    prompt = request["prompt"]
+    track = request.get("track")  # None = global
+    prompts[track] = prompt
+    logger.info(f"[RPC] Prompt set: track={track or 'global'}, prompt='{prompt}'")
+    return json.dumps({"success": True, "prompt": prompt})
+
 
 async def _handle_sam3(
     track: rtc.Track,
@@ -32,14 +51,14 @@ async def _handle_sam3(
     room: rtc.Room,
 ):
     """Process video frames using SAM3 segmentation."""
-    prompt = os.environ.get("SAM3_PROMPT", "object")
     video_stream = rtc.VideoStream(track)
     last_frame_time = 0.0
     frames_processed = 0
     frames_skipped_fps = 0
     frames_skipped_gpu = 0
+    current_prompt = get_prompt(track_name)
 
-    logger.info(f"[{participant_identity}:{track_name}] SAM3 handler started (target {TARGET_FPS} fps, prompt='{prompt}')")
+    logger.info(f"[{participant_identity}:{track_name}] SAM3 handler started (target {TARGET_FPS} fps, prompt='{current_prompt}')")
 
     async for frame_event in video_stream:
         now = time.monotonic()
@@ -55,6 +74,12 @@ async def _handle_sam3(
             continue
 
         last_frame_time = now
+
+        # Get current prompt (may have changed via RPC)
+        prompt = get_prompt(track_name)
+        if prompt != current_prompt:
+            logger.info(f"[{participant_identity}:{track_name}] Prompt changed: '{current_prompt}' -> '{prompt}'")
+            current_prompt = prompt
 
         try:
             frame = frame_event.frame
@@ -166,7 +191,9 @@ async def main():
 
     logger.info(f"Connecting to {url}")
     await room.connect(url, token)
-    logger.info("Connected, waiting for video streams...")
+
+    room.local_participant.register_rpc_method("sam3.set_prompt", _handle_set_prompt)
+    logger.info("Connected, RPC methods registered, waiting for video streams...")
 
     try:
         await asyncio.Future()
