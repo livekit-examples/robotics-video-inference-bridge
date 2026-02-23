@@ -2,6 +2,8 @@ import asyncio
 import json
 import logging
 import os
+import time
+from collections import deque
 
 import cv2
 import numpy as np
@@ -14,6 +16,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("edge-client")
 
 WIDTH, HEIGHT = 640, 480
+FRAME_DELAY_MS = 600  # Delay display to better match detection latency
 
 # Colors for up to 8 detections (BGR)
 COLORS = [
@@ -98,7 +101,11 @@ async def capture_and_display(source: rtc.VideoSource):
         logger.error("Cannot open webcam")
         return
 
-    logger.info("Webcam streaming... Press 'q' to quit")
+    # Frame buffer for delayed display (to sync with detection latency)
+    frame_buffer: deque[tuple[float, np.ndarray]] = deque()
+    delay_sec = FRAME_DELAY_MS / 1000.0
+
+    logger.info(f"Webcam streaming (display delay: {FRAME_DELAY_MS}ms)... Press 'q' to quit")
     try:
         while True:
             ret, frame_bgr = cap.read()
@@ -106,16 +113,29 @@ async def capture_and_display(source: rtc.VideoSource):
                 await asyncio.sleep(0.01)
                 continue
 
+            now = time.monotonic()
             frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
 
-            # Publish to LiveKit
+            # Publish to LiveKit immediately
             video_frame = rtc.VideoFrame(
                 WIDTH, HEIGHT, rtc.VideoBufferType.RGB24, frame_rgb.tobytes()
             )
             source.capture_frame(video_frame)
 
-            # Draw overlay and display
-            display = draw_overlay(frame_bgr, _latest_detections)
+            # Buffer the frame for delayed display
+            frame_buffer.append((now, frame_bgr))
+
+            # Display delayed frame (if available)
+            while frame_buffer and (now - frame_buffer[0][0]) >= delay_sec:
+                _, display_frame = frame_buffer.popleft()
+
+            if frame_buffer:
+                # Show the oldest frame that's ready
+                display_frame = frame_buffer[0][1]
+            else:
+                display_frame = frame_bgr
+
+            display = draw_overlay(display_frame, _latest_detections)
             cv2.imshow("Edge Client - SAM3", display)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
