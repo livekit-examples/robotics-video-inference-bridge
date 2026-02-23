@@ -23,6 +23,10 @@ Subscribes to video streams from edge clients via [LiveKit](https://livekit.io/)
 # Install dependencies
 uv sync
 
+# (Optional) Install with Flash Attention for faster inference
+# Requires Python dev headers: sudo apt-get install python3.12-dev
+uv sync --extra flash
+
 # Configure environment
 cp .env.local.example .env.local
 # Edit .env.local with your LiveKit credentials

@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "cloud-processor"
 version = "0.1.0"
@@ -21,5 +25,14 @@ dependencies = [
     "psutil>=7.2.2",
 ]
 
+[project.optional-dependencies]
+flash = ["flash-attn>=2.5.0"]
+
 [tool.uv.sources]
 sam3 = { git = "https://github.com/facebookresearch/sam3.git" }
+
+[tool.uv.extra-build-dependencies]
+flash-attn = ["torch"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
