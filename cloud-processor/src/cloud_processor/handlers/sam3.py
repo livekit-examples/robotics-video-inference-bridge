@@ -13,12 +13,75 @@ from cloud_processor.state import FRAME_INTERVAL, TARGET_FPS, get_prompt, gpu_lo
 
 # --- Model loading and inference utilities ---
 
-def load_model(confidence_threshold: float = 0.5, warmup: bool = True):
+def _patch_vitdet_attention_for_fa3():
+    """Monkey-patch vitdet.Attention to use Flash Attention 3."""
+    from flash_attn_interface import flash_attn_func
+    from sam3.model import vitdet
+    import torch.nn.functional as F
+    import math
+
+    original_forward = vitdet.Attention.forward
+
+    def fa3_forward(self, x):
+        s = 1 if self.cls_token else 0
+        if x.ndim == 4:
+            B, H, W, _ = x.shape
+            assert s == 0
+            L = H * W
+            ndim = 4
+        else:
+            assert x.ndim == 3
+            B, L, _ = x.shape
+            ndim = 3
+            H = W = int(math.sqrt(L - s))
+
+        qkv = self.qkv(x).reshape(B, L, 3, self.num_heads, -1)
+        q, k, v = qkv.permute(2, 0, 3, 1, 4).unbind(0)
+
+        q, k = self._apply_rope(q, k)
+        if self.use_rel_pos:
+            from sam3.model.vitdet import concat_rel_pos
+            q, k = concat_rel_pos(
+                q.flatten(0, 1), k.flatten(0, 1), (H, W), x.shape[1:3],
+                self.rel_pos_h, self.rel_pos_w, rescale=True,
+                relative_coords=self.relative_coords,
+            )
+            q = q.reshape(B, self.num_heads, H * W, -1)
+            k = k.reshape(B, self.num_heads, H * W, -1)
+
+        # Use FA3: expects (B, L, num_heads, head_dim) in fp16/bf16
+        q = q.transpose(1, 2).contiguous()
+        k = k.transpose(1, 2).contiguous()
+        v = v.transpose(1, 2).contiguous()
+
+        orig_dtype = q.dtype
+        if orig_dtype not in (torch.float16, torch.bfloat16):
+            q, k, v = q.to(torch.bfloat16), k.to(torch.bfloat16), v.to(torch.bfloat16)
+
+        x = flash_attn_func(q, k, v)
+
+        if orig_dtype not in (torch.float16, torch.bfloat16):
+            x = x.to(orig_dtype)
+
+        x = x.reshape(B, L, -1)
+
+        if ndim == 4:
+            x = x.reshape(B, H, W, -1)
+
+        x = self.proj(x)
+        return x
+
+    vitdet.Attention.forward = fa3_forward
+    logger.info("Patched vitdet.Attention to use Flash Attention 3")
+
+
+def load_model(confidence_threshold: float = 0.5, warmup: bool = True, use_fa3: bool = True):
     """Load SAM3 model and return a ready-to-use processor.
 
     Args:
         confidence_threshold: Minimum confidence for detections.
         warmup: If True, run a dummy inference to trigger torch.compile.
+        use_fa3: If True, enable Flash Attention 3 (requires H100 GPU).
     """
     from sam3 import build_sam3_image_model
     from sam3.model.sam3_image_processor import Sam3Processor
@@ -26,6 +89,13 @@ def load_model(confidence_threshold: float = 0.5, warmup: bool = True):
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     torch.autocast("cuda", dtype=torch.float16).__enter__()
+
+    # Patch vitdet attention before building model
+    if use_fa3:
+        try:
+            _patch_vitdet_attention_for_fa3()
+        except ImportError:
+            logger.warning("flash_attn_interface not available, using PyTorch SDPA")
 
     sam3_root = os.path.dirname(__import__("sam3").__file__)
     bpe_path = os.path.join(sam3_root, "assets", "bpe_simple_vocab_16e6.txt.gz")
