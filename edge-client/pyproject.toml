@@ -5,7 +5,7 @@ description = "Edge client for cloud CV - streams video and prints bounding boxe
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "livekit>=0.18",
+    "livekit==1.0.25",
     "livekit-api>=0.8",
     "opencv-python>=4.8",
     "python-dotenv>=1.0",
