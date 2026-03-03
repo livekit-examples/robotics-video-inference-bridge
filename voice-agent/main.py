@@ -15,6 +15,8 @@ from livekit.agents import (
     inference,
 )
 from livekit.plugins import silero
+from livekit.plugins import noise_cancellation
+from livekit.agents import room_io
 
 load_dotenv(".env.local")
 
@@ -67,7 +69,13 @@ async def entrypoint(ctx: JobContext):
         vad=silero.VAD.load(),
     )
 
-    await session.start(agent=Assistant(ctx.room), room=ctx.room)
+    room_options=room_io.RoomOptions(
+        audio_input=room_io.AudioInputOptions(
+            noise_cancellation=noise_cancellation.BVC(),
+        ),
+    )
+
+    await session.start(agent=Assistant(ctx.room), room=ctx.room, room_options=room_options)
 
 
 if __name__ == "__main__":
