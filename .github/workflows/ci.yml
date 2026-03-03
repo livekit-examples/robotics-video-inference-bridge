@@ -10,8 +10,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   edge-client:
-    uses: ./.github/workflows/python-build.yml
+    uses: ./.github/workflows/python-check.yml
     with: { directory: edge-client }
   voice-agent:
-    uses: ./.github/workflows/python-build.yml
+    uses: ./.github/workflows/python-check.yml
     with: { directory: voice-agent }
