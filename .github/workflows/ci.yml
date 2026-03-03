@@ -9,9 +9,6 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  cloud-processor:
-    uses: ./.github/workflows/python-build.yml
-    with: { directory: cloud-processor }
   edge-client:
     uses: ./.github/workflows/python-build.yml
     with: { directory: edge-client }
