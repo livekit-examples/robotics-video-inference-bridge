@@ -1,0 +1,17 @@
+version: 2
+
+updates:
+  - package-ecosystem: pip
+    directory: /cloud-processor
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: pip
+    directory: /edge-client
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: pip
+    directory: /voice-agent
+    schedule:
+      interval: monthly
