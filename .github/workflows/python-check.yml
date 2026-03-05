@@ -1,0 +1,27 @@
+name: Python Check
+on:
+  workflow_call:
+    inputs:
+      directory:
+        description: Path to the Python project directory
+        required: true
+        type: string
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup UV
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "${{ inputs.directory }}/uv.lock"
+      - name: Install dependencies
+        run: uv sync
+      - name: Check lock file
+        run: uv lock --check

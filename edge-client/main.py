@@ -15,7 +15,6 @@ load_dotenv(".env.local")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("edge-client")
 
-WIDTH, HEIGHT = 640, 480
 FRAME_DELAY_MS = 600  # Delay display to better match detection latency
 
 # Colors for up to 8 detections (BGR)
@@ -30,7 +29,6 @@ COLORS = [
     (255, 128, 0),
 ]
 MASK_ALPHA = 0.4
-
 
 def decode_mask_rle(rle: dict) -> np.ndarray:
     """Decode a COCO-style RLE mask to a binary numpy array (H, W)."""
@@ -51,110 +49,93 @@ def draw_overlay(frame_bgr: np.ndarray, detections: list[dict]) -> np.ndarray:
         return frame_bgr
 
     h, w = frame_bgr.shape[:2]
-    overlay = frame_bgr.copy()
+
+    # Paint all mask regions into a single color layer, then blend once with
+    # one vectorized addWeighted call instead of N per-detection blends.
+    color_layer = frame_bgr.copy()
+    has_mask = False
+    for i, det in enumerate(detections):
+        if det.get("mask_rle"):
+            mask = decode_mask_rle(det["mask_rle"])
+            if mask.shape[:2] != (h, w):
+                mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
+            color_layer[mask == 1] = COLORS[i % len(COLORS)]
+            has_mask = True
+
+    if has_mask:
+        overlay = cv2.addWeighted(frame_bgr, 1 - MASK_ALPHA, color_layer, MASK_ALPHA, 0)
+    else:
+        overlay = color_layer
 
     for i, det in enumerate(detections):
         color = COLORS[i % len(COLORS)]
         score = det["score"]
         box = det["box"]
 
-        # Bounding box (normalized coords -> pixel coords)
         x1 = int(box["x1"] * w)
         y1 = int(box["y1"] * h)
         x2 = int(box["x2"] * w)
         y2 = int(box["y2"] * h)
 
-        # Mask overlay
-        if det.get("mask_rle"):
-            mask = decode_mask_rle(det["mask_rle"])
-            if mask.shape[:2] != (h, w):
-                mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
-            colored = np.zeros_like(overlay)
-            colored[:] = color
-            overlay[mask == 1] = cv2.addWeighted(
-                overlay[mask == 1], 1 - MASK_ALPHA, colored[mask == 1], MASK_ALPHA, 0
-            )
-
-        # Bounding box
         cv2.rectangle(overlay, (x1, y1), (x2, y2), color, 2)
 
-        # Label
         label = f"{score:.2f}"
         (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
         cv2.rectangle(overlay, (x1, y1 - th - 6), (x1 + tw + 4, y1), color, -1)
-        cv2.putText(overlay, label, (x1 + 2, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
+        cv2.putText(
+            overlay, label, (x1 + 2, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1
+        )
 
     return overlay
 
 
-# Shared state: latest detections from the cloud processor
-_latest_detections: list[dict] = []
+async def display_remote_track(track: rtc.Track, detections: list[dict]):
+    """Read frames from a subscribed remote video track and display with detection overlays."""
+    video_stream = rtc.VideoStream(track)
 
-
-async def capture_and_display(source: rtc.VideoSource):
-    """Capture webcam frames, publish to LiveKit, and display with overlays."""
-    cap = cv2.VideoCapture(0)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
-
-    if not cap.isOpened():
-        logger.error("Cannot open webcam")
-        return
-
-    # Frame buffer for delayed display (to sync with detection latency)
     frame_buffer: deque[tuple[float, np.ndarray]] = deque()
     delay_sec = FRAME_DELAY_MS / 1000.0
 
-    logger.info(f"Webcam streaming (display delay: {FRAME_DELAY_MS}ms)... Press 'q' to quit")
+    logger.info(
+        f"Displaying remote track '{track.name}' (display delay: {FRAME_DELAY_MS}ms)... "
+        "Press 'q' to quit"
+    )
     try:
-        while True:
-            ret, frame_bgr = cap.read()
-            if not ret:
-                await asyncio.sleep(0.01)
-                continue
+        async for frame_event in video_stream:
+            frame = frame_event.frame
+            rgb_frame = frame.convert(rtc.VideoBufferType.RGB24)
+            arr = np.frombuffer(rgb_frame.data, dtype=np.uint8).reshape(
+                (rgb_frame.height, rgb_frame.width, 3)
+            )
+            frame_bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
 
             now = time.monotonic()
-            frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-
-            # Publish to LiveKit immediately
-            video_frame = rtc.VideoFrame(
-                WIDTH, HEIGHT, rtc.VideoBufferType.RGB24, frame_rgb.tobytes()
-            )
-            source.capture_frame(video_frame)
-
-            # Buffer the frame for delayed display
             frame_buffer.append((now, frame_bgr))
 
-            # Display delayed frame (if available)
             while frame_buffer and (now - frame_buffer[0][0]) >= delay_sec:
                 _, display_frame = frame_buffer.popleft()
 
             if frame_buffer:
-                # Show the oldest frame that's ready
                 display_frame = frame_buffer[0][1]
             else:
                 display_frame = frame_bgr
 
-            display = draw_overlay(display_frame, _latest_detections)
+            display = draw_overlay(display_frame, detections)
             cv2.imshow("Edge Client - SAM3", display)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
-
-            await asyncio.sleep(0)  # yield to event loop
+    except Exception:
+        logger.exception(f"Error rendering remote track '{track.name}'")
     finally:
-        cap.release()
         cv2.destroyAllWindows()
 
 
 async def main():
-    global _latest_detections
-
     url = os.environ["LIVEKIT_URL"]
     api_key = os.environ["LIVEKIT_API_KEY"]
     api_secret = os.environ["LIVEKIT_API_SECRET"]
     room_name = os.environ.get("LIVEKIT_ROOM", "edge-cv")
     client_identity = os.environ.get("CLIENT_IDENTITY", "edge-client")
-    track_name = f"sam3/{client_identity}"
 
     token = (
         api.AccessToken(api_key, api_secret)
@@ -164,34 +145,63 @@ async def main():
     )
 
     room = rtc.Room()
-
+    display_task: asyncio.Task | None = None
+    subscribed_track_name: str | None = None
+    detections: list[dict] = []
 
     @room.on("data_received")
     def on_data_received(data: rtc.DataPacket):
-        global _latest_detections
-        if data.topic == f"data/{track_name}":
+        if subscribed_track_name and data.topic == f"data/{subscribed_track_name}":
             payload = json.loads(data.data.decode())
             prompt = payload.get("prompt", "")
-            detections = payload.get("detections", [])
-            _latest_detections = detections
+            new_detections = payload.get("detections", [])
+            detections[:] = new_detections
             if detections:
                 logger.info(f"prompt='{prompt}' — {len(detections)} detection(s)")
 
+    @room.on("track_subscribed")
+    def on_track_subscribed(
+        track: rtc.Track,
+        publication: rtc.RemoteTrackPublication,
+        participant: rtc.RemoteParticipant,
+    ):
+        print("on_track_subscribed", track.name)
+        nonlocal display_task, subscribed_track_name
+        if track.kind != rtc.TrackKind.KIND_VIDEO:
+            return
+        if not track.name.startswith("sam3/"):
+            return
+        if display_task is not None:
+            return
+
+        subscribed_track_name = track.name
+        logger.info(f"Subscribed to video track: {participant.identity}:{track.name}")
+        display_task = asyncio.create_task(display_remote_track(track, detections))
+
+    @room.on("track_unsubscribed")
+    def on_track_unsubscribed(
+        track: rtc.Track,
+        publication: rtc.RemoteTrackPublication,
+        participant: rtc.RemoteParticipant,
+    ):
+        nonlocal display_task, subscribed_track_name
+        if display_task is not None and track.name == subscribed_track_name:
+            display_task.cancel()
+            display_task = None
+            subscribed_track_name = None
+            logger.info(f"Stopped displaying {participant.identity}:{track.name}")
+
     logger.info(f"Connecting to room: {room_name}")
     await room.connect(url, token)
-    logger.info("Connected, publishing video...")
-
-    source = rtc.VideoSource(WIDTH, HEIGHT)
-    track = rtc.LocalVideoTrack.create_video_track(track_name, source)
-    await room.local_participant.publish_track(
-        track, rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_CAMERA)
-    )
+    logger.info("Connected, waiting for remote video tracks...")
 
     try:
-        await capture_and_display(source)
+        await asyncio.Future()
     except asyncio.CancelledError:
         pass
     finally:
+        if display_task is not None:
+            display_task.cancel()
         await room.disconnect()
 
 

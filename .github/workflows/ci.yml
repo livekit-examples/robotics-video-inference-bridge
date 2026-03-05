@@ -1,0 +1,17 @@
+name: CI
+on:
+  pull_request:
+  push: { branches: [main, develop] }
+  schedule: [cron: 0 0 * * 1]
+  workflow_dispatch:
+  workflow_call:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  edge-client:
+    uses: ./.github/workflows/python-check.yml
+    with: { directory: edge-client }
+  voice-agent:
+    uses: ./.github/workflows/python-check.yml
+    with: { directory: voice-agent }
