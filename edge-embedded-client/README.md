@@ -29,7 +29,7 @@ This client has been tested on:
 
 ### Credentials
 
-**Option A**: Use a LiveKit Sandbox:
+**Option A**: Use a LiveKit [token server](https://docs.livekit.io/frontends/authentication/tokens/sandbox-token-server/) (enable from your project's **Options** at the [Settings](https://cloud.livekit.io/projects/p_/settings/project) page):
 
 ```ini
 CONFIG_LK_EXAMPLE_USE_SANDBOX=y
