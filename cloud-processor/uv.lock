@@ -1713,7 +1713,7 @@ wheels = [
 [[package]]
 name = "sam3"
 version = "0.1.0"
-source = { git = "https://github.com/facebookresearch/sam3.git#f0399e7fce242a6b777286124b0c41cee91c28f6" }
+source = { git = "https://github.com/facebookresearch/sam3.git#bfbed072a07a6a52c8d5fdc75a7a186251a835b1" }
 dependencies = [
     { name = "ftfy" },
     { name = "huggingface-hub" },
