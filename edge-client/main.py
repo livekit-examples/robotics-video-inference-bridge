@@ -121,7 +121,7 @@ async def display_remote_track(track: rtc.Track, detections: list[dict]):
                 display_frame = frame_bgr
 
             display = draw_overlay(display_frame, detections)
-            cv2.imshow("Edge Client - SAM3", display)
+            cv2.imshow("Edge Client - SAM 3.1", display)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
     except Exception:

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cloud-processor"
 version = "0.1.0"
-description = "Cloud processor for edge CV - runs SAM3 segmentation on video streams"
+description = "Cloud processor for edge CV - runs SAM 3.1 segmentation on video streams"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

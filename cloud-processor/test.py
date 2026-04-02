@@ -1,4 +1,4 @@
-"""Quick smoke test — loads SAM3, runs inference on a solid color image, and prints results."""
+"""Quick smoke test — loads SAM 3.1, runs inference on a solid color image, and prints results."""
 
 import time
 
@@ -20,7 +20,7 @@ def make_test_image() -> Image.Image:
 
 
 def main():
-    print(f"Loading SAM3 model...")
+    print(f"Loading SAM 3.1 model...")
     t0 = time.monotonic()
     processor = load_model()
     print(f"Model loaded in {time.monotonic() - t0:.1f}s")

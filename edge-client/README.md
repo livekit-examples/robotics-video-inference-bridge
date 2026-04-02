@@ -1,6 +1,6 @@
 # Edge Client
 
-Python client that captures video from a webcam and streams it to the cloud processor via [LiveKit](https://livekit.io/). Receives SAM3 segmentation results (masks, bounding boxes, scores) in real-time.
+Python client that captures video from a webcam and streams it to the cloud processor via [LiveKit](https://livekit.io/). Receives SAM 3.1 segmentation results (masks, bounding boxes, scores) in real-time.
 
 ## Features
 

@@ -1,11 +1,11 @@
 # Cloud Processor
 
-Subscribes to video streams from edge clients via [LiveKit](https://livekit.io/), runs [SAM3](https://github.com/anthropics/sam3) text-prompted segmentation, and publishes detection results back to the room.
+Subscribes to video streams from edge clients via [LiveKit](https://livekit.io/), runs [SAM 3.1](https://github.com/facebookresearch/sam3) text-prompted segmentation, and publishes detection results back to the room.
 
 ## Features
 
 - Receives video streams from edge clients
-- Runs SAM3 segmentation at ~2 FPS per client
+- Runs SAM 3.1 segmentation at ~2 FPS per client
 - Text-prompted detection (e.g. `"wheel"`, `"person"`)
 - Publishes masks (RLE-encoded), bounding boxes, and scores on `detections` topic
 - GPU lock ensures fair scheduling across multiple clients
@@ -82,7 +82,7 @@ src/cloud_processor/
 ├── state.py             # Config, shared state, RPC handlers
 └── handlers/
     ├── router.py        # Track routing dispatch
-    └── sam3.py          # SAM3 model, inference, frame processing
+    └── sam3.py          # SAM 3.1 model, inference, frame processing
 ```
 
 ## Configuration

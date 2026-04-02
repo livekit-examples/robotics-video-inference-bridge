@@ -76,7 +76,7 @@ def _patch_vitdet_attention_for_fa3():
 
 
 def load_model(confidence_threshold: float = 0.5, warmup: bool = True, use_fa3: bool = True):
-    """Load SAM3 model and return a ready-to-use processor.
+    """Load SAM 3.1 model and return a ready-to-use processor.
 
     Args:
         confidence_threshold: Minimum confidence for detections.
@@ -162,7 +162,7 @@ def decode_mask_rle(rle: dict) -> np.ndarray:
 
 
 def run_inference(processor, image: Image.Image, prompt: str) -> list[dict]:
-    """Run SAM3 segmentation and return detections with RLE-encoded masks.
+    """Run SAM 3.1 segmentation and return detections with RLE-encoded masks.
 
     Args:
         processor: Sam3Processor instance.
@@ -213,7 +213,7 @@ async def handle_sam3(
     processor,
     room: rtc.Room,
 ):
-    """Process video frames using SAM3 segmentation."""
+    """Process video frames using SAM 3.1 segmentation."""
     video_stream = rtc.VideoStream(track)
     last_frame_time = 0.0
     frames_processed = 0
@@ -222,7 +222,7 @@ async def handle_sam3(
     current_prompt = get_prompt(track_name)
 
     logger.info(
-        f"[{participant_identity}:{track_name}] SAM3 handler started "
+        f"[{participant_identity}:{track_name}] SAM 3.1 handler started "
         f"(target {TARGET_FPS} fps, prompt='{current_prompt}')"
     )
 

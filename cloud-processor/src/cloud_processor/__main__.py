@@ -25,7 +25,7 @@ async def main():
         .to_jwt()
     )
 
-    logger.info("Loading SAM3 model...")
+    logger.info("Loading SAM 3.1 model...")
     processor = load_model()
     logger.info("Model ready")
 
