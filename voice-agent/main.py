@@ -32,7 +32,7 @@ class Assistant(Agent):
 
     @function_tool
     async def set_prompt(self, context: RunContext, prompt: str):
-        """Set the object detection prompt for the SAM3 vision system.
+        """Set the object detection prompt for the SAM 3.1 vision system.
 
         Args:
             prompt: The object to detect (e.g. "person", "car", "wheel")

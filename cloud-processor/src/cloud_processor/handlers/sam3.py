@@ -76,7 +76,7 @@ def _patch_vitdet_attention_for_fa3():
 
 
 def load_model(confidence_threshold: float = 0.5, warmup: bool = True, use_fa3: bool = True):
-    """Load SAM3 model and return a ready-to-use processor.
+    """Load SAM 3.1 model and return a ready-to-use processor.
 
     Args:
         confidence_threshold: Minimum confidence for detections.
@@ -85,6 +85,7 @@ def load_model(confidence_threshold: float = 0.5, warmup: bool = True, use_fa3: 
     """
     from sam3 import build_sam3_image_model
     from sam3.model.sam3_image_processor import Sam3Processor
+    from sam3.model_builder import download_ckpt_from_hf
 
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
@@ -99,7 +100,8 @@ def load_model(confidence_threshold: float = 0.5, warmup: bool = True, use_fa3: 
 
     sam3_root = os.path.dirname(__import__("sam3").__file__)
     bpe_path = os.path.join(sam3_root, "assets", "bpe_simple_vocab_16e6.txt.gz")
-    model = build_sam3_image_model(bpe_path=bpe_path)
+    checkpoint_path = download_ckpt_from_hf(version="sam3.1")
+    model = build_sam3_image_model(bpe_path=bpe_path, checkpoint_path=checkpoint_path)
 
     # Compile for faster inference
     model = torch.compile(model, mode="reduce-overhead")
@@ -162,7 +164,7 @@ def decode_mask_rle(rle: dict) -> np.ndarray:
 
 
 def run_inference(processor, image: Image.Image, prompt: str) -> list[dict]:
-    """Run SAM3 segmentation and return detections with RLE-encoded masks.
+    """Run SAM 3.1 segmentation and return detections with RLE-encoded masks.
 
     Args:
         processor: Sam3Processor instance.
@@ -213,7 +215,7 @@ async def handle_sam3(
     processor,
     room: rtc.Room,
 ):
-    """Process video frames using SAM3 segmentation."""
+    """Process video frames using SAM 3.1 segmentation."""
     video_stream = rtc.VideoStream(track)
     last_frame_time = 0.0
     frames_processed = 0
@@ -222,7 +224,7 @@ async def handle_sam3(
     current_prompt = get_prompt(track_name)
 
     logger.info(
-        f"[{participant_identity}:{track_name}] SAM3 handler started "
+        f"[{participant_identity}:{track_name}] SAM 3.1 handler started "
         f"(target {TARGET_FPS} fps, prompt='{current_prompt}')"
     )
 

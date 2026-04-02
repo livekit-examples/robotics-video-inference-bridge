@@ -4,25 +4,25 @@
 
 # LiveKit Robotics: Video Inference Bridge
 
-Real-time cloud inference transport for computer vision using [LiveKit](https://livekit.io/). Stream video from edge devices to the cloud for [SAM3](https://github.com/anthropics/sam3) segmentation, receiving masks and bounding boxes in real-time.
+Real-time cloud inference transport for computer vision using [LiveKit](https://livekit.io/). Stream video from edge devices to the cloud for [SAM 3.1](https://github.com/facebookresearch/sam3) segmentation, receiving masks and bounding boxes in real-time.
 
 ## Architecture
 
 ```
 ┌─────────────────┐                           ┌─────────────────┐
 │   Edge Client   │                           │ Cloud Processor │
-│  (Python/ESP32) │──── H.264 Video ────────▶│     (SAM3)      │
+│  (Python/ESP32) │──── H.264 Video ────────▶│    (SAM 3.1)    │
 │                 │◀─── Detections ──────────│                 │
 └─────────────────┘         LiveKit           └─────────────────┘
 ```
 
-The cloud processor runs SAM3 — a text-prompted segmentation model. Given a video frame and a text prompt (e.g. `"wheel"`), it returns per-object binary masks, bounding boxes, and confidence scores. Masks are RLE-encoded to keep payloads small enough for real-time transport.
+The cloud processor runs SAM 3.1 — a text-prompted segmentation model. Given a video frame and a text prompt (e.g. `"wheel"`), it returns per-object binary masks, bounding boxes, and confidence scores. Masks are RLE-encoded to keep payloads small enough for real-time transport.
 
 ## Components
 
 | Component                                       | Description                        |
 | ----------------------------------------------- | ---------------------------------- |
-| [cloud-processor](./cloud-processor/)           | SAM3 segmentation on video streams |
+| [cloud-processor](./cloud-processor/)           | SAM 3.1 segmentation on video streams |
 | [edge-client](./edge-client/)                   | Python webcam client               |
 | [edge-embedded-client](./edge-embedded-client/) | ESP32-P4 camera client             |
 
@@ -63,12 +63,12 @@ On macOS (edge client only):
 brew install ffmpeg
 ```
 
-### SAM3 model weights
+### SAM 3.1 model weights
 
-The SAM3 model weights are downloaded automatically on first run via HuggingFace. Since the model is gated, you'll need to:
+The SAM 3.1 model weights are downloaded automatically on first run via HuggingFace. Since the model is gated, you'll need to:
 
 1. Create a [HuggingFace](https://huggingface.co/) account
-2. Accept the model license on the [SAM3 model page](https://huggingface.co/facebook/sam3)
+2. Accept the model license on the [SAM 3.1 model page](https://huggingface.co/facebook/sam3.1)
 3. Log in locally:
 
 ```sh
@@ -238,4 +238,4 @@ void decode_mask_rle(const int *counts, int num_counts,
 
 - [LiveKit Docs](https://docs.livekit.io/)
 - [LiveKit ESP32 SDK](https://github.com/livekit/client-sdk-esp32)
-- [SAM3](https://github.com/anthropics/sam3)
+- [SAM 3.1](https://github.com/facebookresearch/sam3)
